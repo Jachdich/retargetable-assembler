@@ -96,8 +96,8 @@ class Assembler:
         return arg_pos, curr_item
 
     def doImmediate(self, args, arg_pos):
-        if not "*" == self.whatis(args[arg_pos]):
-            raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format(x, self.whatis(args[arg_pos]), args[arg_pos], line))
+        if not "*" in self.whatis(args[arg_pos]):
+            raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format("*", self.whatis(args[arg_pos]), args[arg_pos], line))
 
         if self.isNumber(args[arg_pos]):
             return arg_pos + 1, bin(self.getNumber(args[arg_pos]))[2:]
@@ -110,7 +110,7 @@ class Assembler:
            types_list.append(self.whatis(a))
         for template in self.opcodes:
             if template[0] == opcode:
-                t_args = template[1]
+                t_args = template[1] if len(template) > 1 else []
                 if len(t_args) != len(types_list):
                     continue
                 add = True

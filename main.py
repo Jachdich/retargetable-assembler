@@ -1,15 +1,32 @@
-import definition
+#import definition
+import definition_stackvm as definition
 import assembler
 
-code = """
-ld a, a
-"""
+code = """push 0
+push 1
+add
+out
+halt"""
 
 def pad(bin_str, l=8):
     return "0" * (l - len(bin_str)) + bin_str
 
 asm = assembler.Assembler(code, definition)
-print("\n".join([pad(bin(x)[2:]) for x in asm.assemble()]))
+data = asm.assemble()
+dl = len(data)
+len0 = (dl >> 24) & 0xFF
+len1 = (dl >> 16) & 0xFF
+len2 = (dl >> 8) & 0xFF
+len3 = (dl >> 0) & 0xFF
+
+lendata = chr(len0).encode("utf-8") + \
+          chr(len1).encode("utf-8") + \
+          chr(len2).encode("utf-8") + \
+          chr(len3).encode("utf-8")
+          
+with open("test.vm", "wb") as f:
+    f.write(lendata + b"".join(chr(x).encode("utf-8") for x in data))
+#print("\n".join([pad(bin(x)[2:]) for x in asm.assemble()]))
 """
 GPRs: a, b, c, d
 SPRs: pc, sp
