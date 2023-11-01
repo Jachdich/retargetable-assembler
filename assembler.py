@@ -86,18 +86,18 @@ class Assembler:
                         reg_pos = index
                         break
                 if reg_pos == -1:
-                    raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format(regType, self.whatis(args[arg_pos]), args[arg_pos], line))
-                curr_item += self.pad(bin(self.regsets[regtype][args[reg_pos]])[2:], l=self.getRegBits(regtype))
+                    raise SyntaxError("Expected argument type {} but got type {} ({}) instead.".format(regtype, self.whatis(args[arg_pos]), args[arg_pos]))
+                curr_item += self.regsets[regtype][args[reg_pos]]
             else:
-                raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format(regType, self.whatis(args[arg_pos]), args[arg_pos], line))
+                raise SyntaxError("Expected argument type {} but got type {} ({}) instead.".format(regtype, self.whatis(args[arg_pos]), args[arg_pos]))
         else:
-            curr_item += self.pad(bin(self.regsets[regtype][args[arg_pos]])[2:], l=self.getRegBits(regtype))
+            curr_item += self.regsets[regtype][args[arg_pos]]
             arg_pos += 1
         return arg_pos, curr_item
 
     def doImmediate(self, args, arg_pos):
         if not "*" in self.whatis(args[arg_pos]):
-            raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format("*", self.whatis(args[arg_pos]), args[arg_pos], line))
+            raise SyntaxError("Expected argument type {} but got type {} ({}) instead, at line {}".format("*", self.whatis(args[arg_pos]), args[arg_pos], ""))
 
         if self.isNumber(args[arg_pos]):
             return arg_pos + 1, bin(self.getNumber(args[arg_pos]))[2:]
@@ -136,6 +136,8 @@ class Assembler:
             
             if line.strip() == "":
                 continue
+
+            while line.startswith(" "): line = line[1:]
             
             if " " in line:
                 args   = line.split(" ")[1].split(",")
@@ -152,32 +154,37 @@ class Assembler:
             
             template = self.getTemplate(opcode, args)
             if template == None:
-                raise SyntaxError("Invalid syntax - " + line)
+                raise SyntaxError("Invalid syntax: " + line)
             
             arg_pos = 0
+            curr_item = ""
             for byte_template in template:
-                curr_item = ""
                 for x in byte_template:
                     if x.isdigit():
                         curr_item += x
-                        continue
+                        #continue
 
                     elif x in self.regsets:
                         arg_pos, tmp = self.doReg(args, arg_pos, x)
                         curr_item += tmp
 
-                    elif x == "*":
+                    elif x.count("*") == len(x):
+                        print("curr_item", curr_item)
                         arg_pos, tmp = self.doImmediate(args, arg_pos)
-                        curr_item += tmp
+                        if curr_item.isdigit():
+                            interCode.append(int(curr_item, 2))
+                        else:
+                            interCode.append(curr_item)
+                        curr_item = tmp
 
                     elif x == "condition":
                         curr_item += self.conditions[args[arg_pos]]
                         arg_pos += 1
 
-                if curr_item.isdigit():
-                    interCode.append(int(curr_item, 2))
-                else:
-                    interCode.append(curr_item)
+            if curr_item.isdigit():
+                interCode.append(int(curr_item, 2))
+            else:
+                interCode.append(curr_item)
             
         out = []
         for item in interCode:
