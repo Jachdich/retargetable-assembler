@@ -59,8 +59,9 @@ class Assembler:
         if text.startswith("[") and text.endswith("]"):
             p.extend(["[" + a + "]" for a in self.whatis(text[1:-1])])
             canBeLabel = False
+
         for regtype in self.regsets:
-            if text in self.regsets[regtype]:
+            if text in self.regsets[regtype]["values"]:
                 p.append(regtype)
                 canBeLabel = False
         if self.isNumber(text):
@@ -87,11 +88,11 @@ class Assembler:
                         break
                 if reg_pos == -1:
                     raise SyntaxError("Expected argument type {} but got type {} ({}) instead.".format(regtype, self.whatis(args[arg_pos]), args[arg_pos]))
-                curr_item += self.regsets[regtype][args[reg_pos]]
+                curr_item += self.regsets[regtype]["values"][args[reg_pos]]
             else:
                 raise SyntaxError("Expected argument type {} but got type {} ({}) instead.".format(regtype, self.whatis(args[arg_pos]), args[arg_pos]))
         else:
-            curr_item += self.regsets[regtype][args[arg_pos]]
+            curr_item += self.regsets[regtype]["values"][args[arg_pos]]
             arg_pos += 1
         return arg_pos, curr_item
 
@@ -116,6 +117,7 @@ class Assembler:
                 add = True
                 for types, arg in zip(types_list, t_args):
                     if not arg in types:
+                        print(f"Arg {arg=} is not in {types=}")
                         add = False
                         break
                 if add:
@@ -130,9 +132,9 @@ class Assembler:
         labels = {}
         interCode = [] 
         for line in self.code.split("\n"):
-            if self.isNumber(line):
-                interCode.append(self.getNumber(line))
-                continue
+            # if self.isNumber(line):
+            #     interCode.append(self.getNumber(line))
+            #     continue
             
             if line.strip() == "":
                 continue
@@ -148,7 +150,7 @@ class Assembler:
 
             if opcode.endswith(":"):
                 if not self.isValidVarName(opcode):
-                    raise SyntaxError("Labels cannot be of the form 0xSomething or start with 0-9")
+                    raise SyntaxError("Labels cannot start with a number")
                 labels[opcode[:-1]] = len(interCode)
                 continue
             
