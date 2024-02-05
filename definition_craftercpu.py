@@ -37,6 +37,7 @@ OPCODES = {
     ("ld",   ("reg.0", "reg.1")) : (("01110", "reg.0", "reg.1", "00000"),),
 }
 
+
 # DEFINITION = {
 #     "regsets": REGSETS,
 #     "opcodes": OPCODES,
