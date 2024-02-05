@@ -1,7 +1,7 @@
 import math
 
-def pad(bin_str, l=8):
-    return "".join(["0" for i in range(l - len(bin_str))]) + bin_str
+def pad(bin_str, l=8, c='0'):
+    return c * (l - len(bin_str)) + bin_str
 
 def isNumber(txt):
     return txt.isdigit() or txt.startswith("0x") or txt.startswith("0b")
@@ -38,7 +38,6 @@ class Assembler:
     def __init__(self, code, arch):
         self.code = self.clean(code)
         self.regsets = arch.REGSETS
-        self.conditions = arch.CONDITIONS
         self.opcodes = arch.OPCODES
         
     def getRegBits(self, regtype):
@@ -47,8 +46,8 @@ class Assembler:
     def clean(self, code):
         code = "".join(code.split("\t"))
         code = code.split("\n")
-        out = ""
-        for line in code:
+        out = []
+        for line_number, line in enumerate(code):
             ln = ""
             #strip comments
             for char in line:
@@ -57,9 +56,10 @@ class Assembler:
                 ln += char
             #strip empty lines
             if not ln.strip(" ") == "":
-                out += " ".join(ln.split(" ")) + "\n"
+                ln = " ".join(ln.split(" "))
+                out.append((line_number, ln.replace(", ", ",")))
         #replace comma + space with just comma
-        return out.strip().replace(", ", ",")
+        return out
 
     def whatis(self, text):
         p = []
@@ -76,9 +76,6 @@ class Assembler:
             p.append("*")
             canBeLabel = False
             
-        if text in self.conditions:
-            p.append("condition")
-            canBeLabel = False
         if canBeLabel:
             p.append("*") #it's probably a label, could cause issues later
         return p
@@ -136,11 +133,32 @@ class Assembler:
         if len(possible_templates) == 0:
             return None
         return possible_templates[0]
+
+    def format_error(self, text, line_index, char_position):
+        LINE_NUMBER_LENGTH = len(str(self.code[line_index][0])) # number of chars we need to show the full line number
+        CONTEXT_LENGTH = 3 # number of lines to show as context to the error
+        if line_index < CONTEXT_LENGTH: # if there's not enough to show the desired context length
+            CONTEXT_LENGTH = 1 # use the minimum number of lines (just show current line)
+        context = self.code[line_index - CONTEXT_LENGTH + 1:line_index + 1]
+        last_ln = context[0][0]
+        for ln, line in context:
+            while last_ln < ln - 2: # some line was skipped (assume it was empty)
+                last_ln += 1
+                print(f"{pad(str(last_ln + 2), LINE_NUMBER_LENGTH, ' ')}│")
+            print(f"{pad(str(ln + 1), LINE_NUMBER_LENGTH, ' ')}│{line}")
+
+        prefix_spaces = 0
+        while context[-1][1][prefix_spaces].isspace():
+            prefix_spaces += 1
+        print(" " * (LINE_NUMBER_LENGTH + 1 + prefix_spaces) + "^" * len(context[-1][1].strip()))
+        print(text)
+        exit(1)
     
     def assemble(self):
         labels = {}
         interCode = [] 
-        for line in self.code.split("\n"):
+        for line_index, line_info in enumerate(self.code):
+            line_number, line = line_info
             # if self.isNumber(line):
             #     interCode.append(self.getNumber(line))
             #     continue
@@ -158,14 +176,14 @@ class Assembler:
                 opcode = line
 
             if opcode.endswith(":"):
-                if not self.isValidVarName(opcode):
-                    raise SyntaxError("Labels cannot start with a number")
+                if not isValidVarName(opcode):
+                    self.format_error("Syntax Error: Labels cannot start with a number", line_index, 0)
                 labels[opcode[:-1]] = len(interCode)
                 continue
             
             template = self.getTemplate(opcode, args)
             if template == None:
-                raise SyntaxError("Invalid syntax: " + line)
+                self.format_error("Syntax Error: Invalid syntax", line_index, 0)
 
             resolved_args = {}
             for supplied_arg, expected_arg in zip(args, template[1]):
@@ -174,9 +192,11 @@ class Assembler:
                     if isNumber(supplied_arg):
                         resolved_args[expected_arg] = toNumber(supplied_arg)
                     else:
-                        raise SyntaxError(f"Expected immediate value, found '{supplied_arg}' instead")
+                        self.format_error(f"Syntax Error: Expected immediate value, found '{supplied_arg}' instead", line_index, 0)
 
                 elif expected_arg_type in self.regsets:
+                    if not supplied_arg in self.regsets[expected_arg_type]:
+                        self.format_error(f"Syntax Error: Expected a register of {self.regsets[expected_arg_type]}, got '{supplied_arg}' instead.")
                     resolved_args[expected_arg] = self.regsets[expected_arg_type][supplied_arg]
 
             for word_template in self.opcodes[template]:
@@ -197,42 +217,6 @@ class Assembler:
 
                     curr_word += resolved_value
                 interCode.append(curr_word)
-            # arg_pos = 0
-            # curr_item = ""
-            # for byte_template in template:
-            #     for arg in byte_template:
-            #         if "." in arg:
-            #             arg, index = arg.split(".")
-            #         else:
-            #             index = 0
-
-            #         if arg.isdigit():
-            #             curr_item += arg
-
-            #         elif arg in self.regsets:
-            #             arg_pos, tmp = self.doReg(args, arg_pos, arg)
-            #             curr_item += tmp
-
-            #         elif arg.count("*") == len(arg):
-            #             print("curr_item", curr_item)
-            #             arg_pos, tmp = self.doImmediate(args, arg_pos)
-            #             if curr_item.isdigit():
-            #                 interCode.append(int(curr_item, 2))
-            #             else:
-            #                 interCode.append(curr_item)
-            #             curr_item = tmp
-
-            #         elif arg == "condition":
-            #             curr_item += self.conditions[args[arg_pos]]
-            #             arg_pos += 1
-            #         else:
-            #             print(f"arg not recognised: {arg}")
-
-            # if curr_item.isdigit():
-            #     interCode.append(int(curr_item, 2))
-            # else:
-            #     interCode.append(curr_item)
-            
         # out = []
         # for item in interCode:
         #     if labels.get(item, None) != None:
@@ -247,9 +231,14 @@ class Assembler:
 if __name__ == "__main__":
     import definition_craftercpu as definition
     code = """
-    add a, b
+label:
+    add a, basd
     ld a, 15
-    lol 5, 2
+label2:
+    
+
+
+    ;jz label
     """
     a = Assembler(code, definition)
     data = a.assemble()
