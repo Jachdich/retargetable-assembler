@@ -52,6 +52,23 @@ class Label:
     def with_bits(self, bits):
         return Label(self.value, bits)
 
+
+def without_index(arg):
+    """Remove the .xyz from things like 'reg.0' and '[reg.0]' without getting rid of the []"""
+    deref = False
+    if arg.startswith("[") and arg.endswith("]"):
+        arg = arg[1:-1]
+        deref = True
+    arg = arg.split(".")[0]
+    if deref:
+        arg = "[" + arg + "]"
+    return arg
+
+def without_deref(arg):
+    if arg.startswith("[") and arg.endswith("]"):
+        return arg[1:-1]
+    return arg
+
 class Assembler:
     def __init__(self, code, arch):
         self.code = self.clean(code)
@@ -110,7 +127,7 @@ class Assembler:
                     continue
                 add = True
                 for types, arg in zip(types_list, t_args):
-                    arg_type = arg.split(".")[0] # ignore the index
+                    arg_type = without_index(arg)
                     if not arg_type in types:
                         add = False
                         break
@@ -183,7 +200,10 @@ class Assembler:
 
             resolved_args = {}
             for supplied_arg, expected_arg in zip(args, template[1]):
-                expected_arg_type = expected_arg.split(".")[0]
+                # remove the [], if it exists, because it's not relevant rn
+                expected_arg = without_deref(expected_arg)
+                expected_arg_type = without_index(expected_arg)
+                supplied_arg = without_deref(supplied_arg)
                 if expected_arg_type == "*":
                     if is_number(supplied_arg):
                         resolved_args[expected_arg] = Literal(to_number(supplied_arg))
@@ -194,9 +214,8 @@ class Assembler:
 
                 elif expected_arg_type in self.regsets:
                     if not supplied_arg in self.regsets[expected_arg_type]:
-                        self.format_error(f"Syntax Error: Expected a register of {self.regsets[expected_arg_type]}, got '{supplied_arg}' instead.")
+                        self.format_error(f"Syntax Error: Expected a register of {self.regsets[expected_arg_type]}, got '{supplied_arg}' instead.", line_index, 0)
                     resolved_args[expected_arg] = Literal(self.regsets[expected_arg_type][supplied_arg])
-
 
             for word_template in self.opcodes[template]:
                 curr_word = []
@@ -235,12 +254,7 @@ class Assembler:
 if __name__ == "__main__":
     import definition_craftercpu as definition
     code = """
-label:
-    add a, b
-    ld a, 15
-label2:
-    jz label2
-.d16 69
+    ld a, [b]
     """
     a = Assembler(code, definition)
     data = a.assemble()
