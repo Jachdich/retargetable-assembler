@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import math
 
 def pad(bin_str, l=8, c='0'):
@@ -252,11 +253,79 @@ class Assembler:
         return out
 
 if __name__ == "__main__":
-    import definition_craftercpu as definition
-    code = """
-    ld a, [b]
-    """
-    a = Assembler(code, definition)
+    import argparse
+    parser = argparse.ArgumentParser(prog="CrafterCPU Assembler")
+    parser.add_argument("asmfile", help="The input file to assemble")
+    parser.add_argument("-o", "--outfile", default="-", help="The file to write output to. Defaults to stdout")
+    parser.add_argument("-b", "--bin", action="store_true", help="Whether to output in human-readable ascii (strings of 1s and 0s, default) or as a binary file.")
+    args = parser.parse_args()
+    
+    REGSETS = {
+        "reg": {
+            "a": "000",
+            "b": "001",
+            "c": "010",
+            "h": "011",
+            "l": "100",
+            "pc": "101",
+            "sp": "110",
+            "bp": "111",
+        },
+    }
+
+    OPCODES = {
+        ("add",  ("reg.0", "reg.1"))   : (("00000", "reg.0", "reg.1", "00000"),),
+        ("sub",  ("reg.0", "reg.1"))   : (("00001", "reg.0", "reg.1", "00000"),),
+        ("shr",  ("reg",))             : (("00010", "reg",   "000",   "00000"),),
+        ("cmp",  ("reg.0", "reg.1"))   : (("00011", "reg.0", "reg.1", "00000"),),
+        ("adc",  ("reg.0", "reg.1"))   : (("00100", "reg.0", "reg.1", "00000"),),
+        ("sbc",  ("reg.0", "reg.1"))   : (("00101", "reg.0", "reg.1", "00000"),),
+        ("nand", ("reg.0", "reg.1"))   : (("00110", "reg.0", "reg.1", "00000"),),
+        ("xor",  ("reg.0", "reg.1"))   : (("00111", "reg.0", "reg.1", "00000"),),
+
+        ("add",  ("reg", "*"))         : (("01000", "reg", "********"),),
+        ("sub",  ("reg", "*"))         : (("01001", "reg", "********"),),
+
+        ("cmp",  ("reg", "*"))         : (("01011", "reg", "********"),),
+        ("adc",  ("reg", "*"))         : (("01100", "reg", "********"),),
+        ("sbc",  ("reg", "*"))         : (("01101", "reg", "********"),),
+        ("nand", ("reg", "*"))         : (("01110", "reg", "********"),),
+        ("xor",  ("reg", "*"))         : (("01111", "reg", "********"),),
+
+        ("jmp",  ("*",))               : (("10000", "***********"),),
+        ("jz",   ("*",))               : (("10001", "***********"),),
+        ("jn",   ("*",))               : (("10010", "***********"),),
+        ("jp",   ("*",))               : (("10011", "***********"),),
+        ("ld",   ("reg", "*"))         : (("10100", "reg", "********"),),
+        ("ld",   ("reg.0", "reg.1"))   : (("10101", "reg.0", "reg.1", "00000"),),
+        ("ld",   ("reg.0", "[reg.1]")) : (("10110", "reg.0", "reg.1", "00000"),),
+        ("ld",   ("[reg.0]", "reg.1")) : (("10111", "reg.0", "reg.1", "00000"),),
+
+        ("push", ("reg",))             : (("11010", "reg", "00000000"),),
+        ("pop",  ("reg",))             : (("11011", "reg", "00000000"),),
+        ("scf", ())                    : (("1110000000000000"),),
+        ("rcf", ())                    : (("1110000000000000"),),
+        ("call", ("*",))               : (("11110", "***********"),),
+        ("nop", ())                    : (("1111111111111111")),
+    }
+
+    class Definition:
+        def __init__(self, REGSETS, OPCODES):
+            self.REGSETS = REGSETS
+            self.OPCODES = OPCODES
+
+    with open(args.asmfile, "r") as f:
+        code = f.read()
+
+    a = Assembler(code, Definition(REGSETS, OPCODES))
     data = a.assemble()
-    # print("\n".join([pad(bin(n)[2:], 8) for n in data]))
-    print("\n".join(data))
+    if args.bin:
+        out = ""# "".join(data) TODO
+    else:
+        out = "\n".join(data).encode("utf-8")
+    if args.outfile == "-":
+        print(out.decode("utf-8"))
+    else:
+        with open(args.outfile, "wb") as f:
+            f.write(out)
+
